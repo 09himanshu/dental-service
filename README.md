@@ -1,6 +1,6 @@
-# Dental Service — Multi-Tenant Backend with Database Routing & Structured Logging
+# Multi-Tenant Backend with Database Routing & Structured Logging
 
-A single Express.js backend service that serves multiple dental practices, each with its own isolated PostgreSQL database, routed dynamically from one set of endpoints.
+A single Express.js backend service that serves multiple medical practices, each with its own isolated PostgreSQL database, routed dynamically from one set of endpoints.
 
 ---
 
@@ -26,6 +26,10 @@ dental-service/
 │   │   ├── requestId.js           # UUID per request
 │   │   ├── tenantRouter.js        # X-Practice-Id → dbPool routing
 │   │   └── requestLogger.js       # request_started / request_completed logs
+│   ├── controllers/
+│   │   ├── patients.controller.js        
+│   │   ├── appointments.controller.js
+│   │   └── health.controller.js
 │   ├── routes/
 │   │   ├── patients.js            # POST, GET /:id, GET ?search=
 │   │   ├── appointments.js        # POST, GET with filters
