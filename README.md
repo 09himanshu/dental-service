@@ -1,6 +1,6 @@
-# Dental Service — Multi-Tenant Backend with Database Routing & Structured Logging
+# Multi-Tenant Backend with Database Routing & Structured Logging
 
-A single Express.js backend service that serves multiple dental practices, each with its own isolated PostgreSQL database, routed dynamically from one set of endpoints.
+A single Express.js backend service that serves multiple medical practices, each with its own isolated PostgreSQL database, routed dynamically from one set of endpoints.
 
 ---
 
@@ -26,6 +26,10 @@ dental-service/
 │   │   ├── requestId.js           # UUID per request
 │   │   ├── tenantRouter.js        # X-Practice-Id → dbPool routing
 │   │   └── requestLogger.js       # request_started / request_completed logs
+│   ├── controllers/
+│   │   ├── patients.controller.js        
+│   │   ├── appointments.controller.js
+│   │   └── health.controller.js
 │   ├── routes/
 │   │   ├── patients.js            # POST, GET /:id, GET ?search=
 │   │   ├── appointments.js        # POST, GET with filters
@@ -106,13 +110,13 @@ Server runs on `http://localhost:3000`
 ## Environment Variables
 
 ```env
-PORT=3000
+PORT=3xxx
 
-PRACTICE_A_ID=uuid-aaa
-PRACTICE_A_DB=postgresql://devuser:password123@localhost:5432/practice_a_db
+PRACTICE_A_ID=<uuid>
+PRACTICE_A_DB=postgresql://<username>:<password>@localhost:5432/<database_name>
 
-PRACTICE_B_ID=uuid-bbb
-PRACTICE_B_DB=postgresql://devuser:password123@localhost:5432/practice_b_db
+PRACTICE_B_ID=u<uuid>
+PRACTICE_B_DB=postgresql://<username>:<password>@localhost:5432/<database_name>
 
 LOG_LEVEL=debug
 ```
@@ -121,7 +125,7 @@ LOG_LEVEL=debug
 
 ## API Endpoints
 
-All endpoints except `/health` require `X-Practice-Id` header.
+All endpoints except `/health` require the `X-Practice-Id` header.
 
 ### Health Check
 ```
@@ -141,7 +145,7 @@ GET    /patients?search=<name|phone> Search with pagination
 
 ```
 POST   /appointments                                    Create appointment
-GET    /appointments?from=<date>&to=<date>&status=<>   List with filters + pagination
+GET    /appointments?from=<date>&to=<date>&status=<>    List with filters + pagination
 ```
 
 ---
@@ -150,14 +154,14 @@ GET    /appointments?from=<date>&to=<date>&status=<>   List with filters + pagin
 
 ```bash
 # Create patient in Practice A
-curl -X POST http://localhost:3000/patients \
-  -H "X-Practice-Id: uuid-aaa" \
+curl -X POST http://localhost:3000/api/v1/patients \
+  -H "X-Practice-Id: <uuid>" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Rahul Sharma","phone":"9876543210","email":"rahul@gmail.com"}'
+  -d '{"name": "Rahul Sharma", "phone": "9876543210", "email": "rahul@gmail.com"}'
 # Returns: { "patient_id": 51, ... }
 
 # Try to fetch Practice A patient using Practice B header → 404
-curl http://localhost:3000/patients/51 \
+curl http://localhost:3000/api/v1/patients/51 \
   -H "X-Practice-Id: uuid-bbb"
 # Returns: { "error": "Patient not found in this practice" }
 ```
@@ -174,8 +178,8 @@ Every log line is a flat JSON object:
   "level": "info",
   "event": "request_completed",
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "practice_id": "uuid-aaa",
-  "route": "/patients",
+  "practice_id": <uuid>,
+  "route": "/papi/v1/atients",
   "method": "POST",
   "status_code": 201,
   "duration_ms": 45
@@ -239,16 +243,16 @@ Each practice has a physically separate PostgreSQL database with its own connect
 
 ### 3. Pool sizing reasoning
 
-Each pool is set to `max: 10` connections. With 2 practices, that is 20 total connections against PostgreSQL's default `max_connections` of 100 — well within safe limits. `idleTimeoutMillis: 30000` releases unused connections after 30 seconds. In production, pool size would be tuned based on actual concurrent load per practice.
+Each pool is set to `max: 10` connections. With 2 practices, that is 20 total connections against PostgreSQL's default `max_connections` of 100 — well within safe limits. `idleTimeoutMillis: 30000` releases unused connections after 30 seconds. In production, the pool size would be tuned based on actual concurrent load per practice.
 
 ### 4. Logging schema reasoning
 
-Flat JSON was chosen over nested objects so every field is directly accessible via `jq` without path traversal. `request_id` as a correlation ID enables tracing the full lifecycle of any request across all log lines. SQL parameters are logged separately from the query string to avoid sensitive data appearing inline and to keep logs safe from SQL injection patterns. Stack traces are in a dedicated `stack` field so `grep` and `jq` filters on `event` or `message` remain clean.
+Flat JSON was chosen over nested objects so every field is directly accessible via `jq` without path traversal. `request_id` as a correlation ID enables tracing the full lifecycle of any request across all log lines. SQL parameters are logged separately from the query string to avoid sensitive data appearing inline and to keep logs safe from SQL injection patterns. Stack traces are in a dedicated `stack` field, so `grep` and `jq` filters on `event` or `message` remain clean.
 
 ### 5. What would change to support 100 practices?
 
 - Move practice config from `.env` to a `practices` table in a separate admin database
-- Load pools dynamically on first request per practice (lazy initialization) and cache in memory
+- Load pools dynamically on first request per practice (lazy initialisation) and cache in memory
 - Add a pool eviction strategy for idle practices to avoid holding 100 open pool objects
 - Add a circuit breaker per pool so one unhealthy DB does not cascade
 - Move `X-Practice-Id` validation to a JWT claim so practices cannot spoof each other's IDs
@@ -262,27 +266,27 @@ Flat JSON was chosen over nested objects so every field is directly accessible v
 curl http://localhost:3000/health
 
 # Create patient
-curl -X POST http://localhost:3000/patients \
+curl -X POST http://localhost:3000/api/v1/patients \
   -H "X-Practice-Id: uuid-aaa" \
   -H "Content-Type: application/json" \
   -d '{"name":"Rahul Sharma","phone":"9876543210","email":"rahul@gmail.com"}'
 
 # Fetch patient
-curl http://localhost:3000/patients/1 \
+curl http://localhost:3000/api/v1/patients/1 \
   -H "X-Practice-Id: uuid-aaa"
 
 # Search patients
-curl "http://localhost:3000/patients?search=Rahul&page=1&limit=5" \
+curl "http://localhost:3000/api/v1/patients?search=Rahul&page=1&limit=5" \
   -H "X-Practice-Id: uuid-aaa"
 
 # Create appointment
-curl -X POST http://localhost:3000/appointments \
+curl -X POST http://localhost:3000/api/v1/appointments \
   -H "X-Practice-Id: uuid-aaa" \
   -H "Content-Type: application/json" \
   -d '{"patient_id":1,"scheduled_at":"2026-06-15T10:00:00Z","status":"scheduled","notes":"Regular checkup"}'
 
 # List appointments with filters
-curl "http://localhost:3000/appointments?from=2026-01-01&to=2026-12-31&status=scheduled" \
+curl "http://localhost:3000/api/v1/appointments?from=2026-01-01&to=2026-12-31&status=scheduled" \
   -H "X-Practice-Id: uuid-aaa"
 
 # Cross-practice leakage test — returns 404
@@ -290,5 +294,5 @@ curl http://localhost:3000/patients/1 \
   -H "X-Practice-Id: uuid-bbb"
 
 # Missing header test — returns 400
-curl http://localhost:3000/patients/1
+curl http://localhost:3000/api/v1/patients/1
 ```
