@@ -9,7 +9,10 @@ const app = express();
 import requestId from './middleware/requestId.js'
 import tenantRouter from './middleware/tenantRouter.js'
 import requestLogger from './middleware/requestLogger.js'
+import { globalLimiter, practiceLimiter, writeLimiter } from './middleware/rateLimiter.js'
 
+// Apply global rate limiter to all requests
+app.use(globalLimiter);
 
 // Routes
 import router from './routes/index.js'
@@ -21,14 +24,15 @@ import logger from './logger/index.js';
 app.use(express.json());
 
 app.use(requestId);
-app.use(requestLogger);
 app.use('/health', healthRouter);
 
 // Tenant middleware — sirf patients aur appointments ke liye
+app.use(practiceLimiter)
 app.use(tenantRouter);
+app.use(requestLogger);
 
 // Protected routes
-app.use('/api/v1', router);
+app.use('/api/v1', writeLimiter, router);
 
 // 404 handler
 app.use((req, res) => {
@@ -46,8 +50,6 @@ app.use((err, req, res, next) => {
   });
   res.status(500).json({ error: 'Internal server error' });
 });
-
-// await run()
 
 // Server start
 const PORT = process.env.PORT || 3000;
